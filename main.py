@@ -3,14 +3,16 @@ from PIL import Image, ImageTk
 import numpy as np
 import lib.canny as cny
 from pathlib import Path
+import os
 
 class ImageProcessing:
-    def load_image(self, im=None):
+    def load_image(self):
         if self.canvas != None:
             self.canvas.delete("all")
-        if im==None:
-            im = self.entry_image.get()
-        self.image = Image.open(im)
+        
+        self.pathname = self.entry_image.get()
+        
+        self.image = Image.open(self.pathname)
         
         self.photo = self.pil_resize()
         
@@ -37,8 +39,12 @@ class ImageProcessing:
         self.refresh_image(res)
         
     def save_image(self):
-        pass
-                 
+        desired_extension = '.jpg'
+        basename = os.path.basename(self.pathname)
+        imagename_no_ext = basename[:basename.rindex('.')]
+        
+        self.image.convert("RGB").save("{}{}{}".format("outputImage/", imagename_no_ext, desired_extension))
+        
     def __init__(self, master):
         self.root = master
         
@@ -66,10 +72,8 @@ class ImageProcessing:
         self.canvas = None
         self.load_button = Button(self.control_frame, text="Load Image", command=self.load_image)
         self.load_button.grid(row=1, column=0, sticky=N+W)
-        self.show_button = Button(self.control_frame, text="Refresh Image", command=self.refresh_image)
-        self.show_button.grid(row=1, column=1, sticky=N+W)
         self.save_button = Button(self.control_frame, text="Save Image", command=self.save_image)
-        self.save_button.grid(row=2, column=0, sticky=N+W)
+        self.save_button.grid(row=1, column=1, sticky=N+E)
         
     def prepare_canny(self):
         Label(self.canny_frame, text="Canny").grid(row=2, sticky=W)
@@ -106,4 +110,4 @@ root = Tk()
 
 app = ImageProcessing(root)
 
-root.mainloop() # optional; see description below
+root.mainloop()
