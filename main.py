@@ -1,24 +1,29 @@
 from tkinter import *
+from tkinter import filedialog
 from PIL import Image, ImageTk
 import numpy as np
-import lib.canny as cny
 from pathlib import Path
 import os
+import time
 
+import lib.canny as cny
+        
 class ImageProcessing:
+    def open_file(self):
+        filetypes = [('Image Files', ('.png', 'jpg')), ('All Filetype', '.*') ]
+        self.pathname = filedialog.askopenfilename(parent=self.root, initialdir= os.getcwd(), title="Choose an image", filetypes=filetypes)
+        
+        if self.pathname != None:
+            self.load_image()
+
     def load_image(self):
-        if self.canvas != None:
-            self.canvas.delete("all")
-        
-        self.pathname = self.entry_image.get()
-        
         self.image = Image.open(self.pathname)
         
         self.photo = self.pil_resize()
         
-        self.canvas = Canvas(self.image_frame, width=self.im_w + 1, height= self.im_h + 1)
+        self.canvas = Canvas(self.root, width=self.im_w + 1, height= self.im_h + 1)
         self.imgArea = self.canvas.create_image(self.im_w / 2, self.im_h / 2, image = self.photo)
-        self.canvas.grid(row=0, column=0, sticky=W)
+        self.canvas.grid(row=0, column=0, sticky=N+W)
         
         #Label(self.image_frame, text="H: {} ; W: {}".format(self.im_w, self.im_h)).grid(row=1)
         
@@ -29,10 +34,38 @@ class ImageProcessing:
         self.canvas.itemconfig(self.imgArea, image = self.photo)
         #Label(self.root, text="H: {} ; W: {}".format(self.im_w, self.im_h)).grid(row=1)
     
-    def canny_edge_finding(self):
-        window = int(self.entry_window.get())
-        weight = float(self.entry_weight.get())
+    def undo(self):
+        self.refresh_image(self.last_image.copy())
         
+    def gaussian_image_segmentation(self):
+        pass
+           
+    def canny_window(self):
+        canny_window = Toplevel(self.root)
+        canny_window.title("Canny Edge Finding")
+        
+        Label(canny_window, text="Window").grid(row=0, sticky=W)
+        Label(canny_window, text="Weight").grid(row=1, sticky=W)
+        
+        canny_entry_window = Entry(canny_window)
+        canny_entry_weight = Entry(canny_window)
+        canny_entry_window.insert(0,"3")
+        canny_entry_weight.insert(0,"2")
+        canny_entry_window.grid(row=0, column=1)
+        canny_entry_weight.grid(row=1, column=1)
+        
+        self.canny_button = Button(canny_window, text="SUBMIT", 
+                            command= lambda: self.canny_edge_finding(
+                                            int(canny_entry_window.get()),
+                                            float(canny_entry_weight.get())
+                                            )
+                                    )
+        self.canny_button.grid(row=0, column=2, rowspan=2, sticky=N+S+E+W)
+    
+        
+    def canny_edge_finding(self, window, weight):
+        
+        self.last_image = self.image.copy()
         res = cny.canny(im = self.image, w = window, weight = weight)
         res = Image.fromarray(cny.normalize(res).astype('int8'))
         
@@ -48,47 +81,34 @@ class ImageProcessing:
     def __init__(self, master):
         self.root = master
         
-        self.control_frame = Frame(self.root)
-        self.control_frame.grid(row=0, column=0)
+        self.prepare_menubar()
         
-        self.segmentation_frame = Frame(self.root)
-        self.segmentation_frame.grid(row=1, column=0)
+    def prepare_menubar(self):
+        main_menu = Menu(self.root)
         
-        self.canny_frame = Frame(self.root)
-        self.canny_frame.grid(row=2, column=0)
+        filemenu = Menu(main_menu, tearoff=0)
+        filemenu.add_command(label="Open", command=self.open_file)
+        filemenu.add_command(label="Save", command=self.save_image)
+        filemenu.add_separator()
+        filemenu.add_command(label="Quit", command=root.quit)
+        main_menu.add_cascade(label="File", menu=filemenu)
         
-        self.image_frame = Frame(self.root)
-        self.image_frame.grid(row=0, column=1, rowspan=3)
+        editmenu = Menu(main_menu, tearoff=0)
+        editmenu.add_command(label="Undo", command=self.undo)
+        main_menu.add_cascade(label="Edit", menu=editmenu)
         
-        self.prepare_image()
-        self.prepare_canny()
+        adveditmenu = Menu(main_menu, tearoff=0)
+        adveditmenu.add_command(label="K-Means Segm", command=root.quit)
+        adveditmenu.add_command(label="Canny Edge", command=self.canny_window)
+        main_menu.add_cascade(label="Advanced", menu=adveditmenu)
         
-    def prepare_image(self):
-        Label(self.control_frame, text="Image Path").grid(row=0, sticky=N+W)
-        self.entry_image = Entry(self.control_frame)
-        self.entry_image.grid(row=0, column=1, sticky=N+W)
-        self.entry_image.insert(0, "inputImage/input.png")
+        helpmenu = Menu(main_menu, tearoff=0)
+        helpmenu.add_command(label="???", command=root.quit)
+        helpmenu.add_command(label="About", command=root.quit)
+        main_menu.add_cascade(label="Help", menu=helpmenu)
         
-        self.canvas = None
-        self.load_button = Button(self.control_frame, text="Load Image", command=self.load_image)
-        self.load_button.grid(row=1, column=0, sticky=N+W)
-        self.save_button = Button(self.control_frame, text="Save Image", command=self.save_image)
-        self.save_button.grid(row=1, column=1, sticky=N+E)
+        self.root.config(menu=main_menu)
         
-    def prepare_canny(self):
-        Label(self.canny_frame, text="Canny").grid(row=2, sticky=W)
-        Label(self.canny_frame, text="Window").grid(row=3, sticky=W)
-        Label(self.canny_frame, text="Weight").grid(row=4, sticky=W)
-        self.entry_window = Entry(self.canny_frame)
-        self.entry_weight = Entry(self.canny_frame)
-        self.entry_window.insert(0,"3")
-        self.entry_weight.insert(0,"2")
-        self.entry_window.grid(row=3, column=1)
-        self.entry_weight.grid(row=4, column=1)
-        
-        self.canny_button = Button(self.canny_frame, text="CANNY", command=self.canny_edge_finding)
-        self.canny_button.grid(row=4, column=2, rowspan=2)
-    
     def pil_resize(self):
         self.im_w, self.im_h = self.image.size
         if self.im_w > 500 or self.im_h > 500:
