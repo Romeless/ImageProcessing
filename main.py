@@ -5,9 +5,10 @@ import numpy as np
 from pathlib import Path
 import os
 import time
-
 import lib.canny as cny
-        
+import lib.kmeans as km
+from lib.toolbox import *
+
 class ImageProcessing:
     def open_file(self):
         filetypes = [('Image Files', ('.png', 'jpg')), ('All Filetype', '.*') ]
@@ -37,6 +38,44 @@ class ImageProcessing:
     def undo(self):
         self.refresh_image(self.last_image.copy())
         
+    def kmeans_window(self):
+        kmeans_window = Toplevel(self.root)
+        kmeans_window.title("K-Means Segmentation")
+        
+        Label(kmeans_window, text="Cluster").grid(row=0, sticky=W)
+        Label(kmeans_window, text="Tolerance").grid(row=1, sticky=W)
+        Label(kmeans_window, text="Max Iterations").grid(row=2, sticky=W)
+        
+        kmeans_entry_cluster = Entry(kmeans_window)
+        kmeans_entry_tol = Entry(kmeans_window)
+        kmeans_entry_iter = Entry(kmeans_window)
+        kmeans_entry_cluster.insert(0,"5")
+        kmeans_entry_tol.insert(0,"0.0001")
+        kmeans_entry_iter.insert(0,"300")
+        kmeans_entry_cluster.grid(row=0, column=1)
+        kmeans_entry_tol.grid(row=1, column=1)
+        kmeans_entry_iter.grid(row=2, column=1)
+        
+        self.kmeans_button = Button(kmeans_window, text="SUBMIT", 
+                            command= lambda: self.kmeans(
+                                            int(kmeans_entry_cluster.get()),
+                                            float(kmeans_entry_tol.get()),
+                                            int(kmeans_entry_iter.get())
+                                            )
+                                    )
+        self.kmeans_button.grid(row=0, column=2, rowspan=2, sticky=N+S+E+W)
+        
+        self.kmeans_w_undo = Button(kmeans_window, text="UNDO", command=self.undo)
+        self.kmeans_w_undo.grid(row=2, column=2)
+    
+    def kmeans(self, cluster, tol, iter):
+        self.last_image = self.image.copy()
+        
+        res = km.kmeans(data = self.image, k = cluster, tol = tol, max_iter = iter)
+        
+        self.refresh_image(res)
+        
+        
     def gaussian_image_segmentation(self):
         pass
            
@@ -61,13 +100,14 @@ class ImageProcessing:
                                             )
                                     )
         self.canny_button.grid(row=0, column=2, rowspan=2, sticky=N+S+E+W)
+        self.canny_w_undo = Button(canny_window, text="UNDO", command=self.undo)
+        self.canny_w_undo.grid(row=2, column=2)
     
-        
     def canny_edge_finding(self, window, weight):
         
         self.last_image = self.image.copy()
         res = cny.canny(im = self.image, w = window, weight = weight)
-        res = Image.fromarray(cny.normalize(res).astype('int8'))
+        res = Image.fromarray(normalize(res).astype('int8'))
         
         self.refresh_image(res)
         
@@ -76,7 +116,7 @@ class ImageProcessing:
         basename = os.path.basename(self.pathname)
         imagename_no_ext = basename[:basename.rindex('.')]
         
-        self.image.convert("RGB").save("{}{}{}".format("outputImage/", imagename_no_ext, desired_extension))
+        self.image.convert("RGB").save("{}{}-{}{}".format("outputImage/", imagename_no_ext, time.time(), desired_extension))
         
     def __init__(self, master):
         self.root = master
@@ -98,12 +138,13 @@ class ImageProcessing:
         main_menu.add_cascade(label="Edit", menu=editmenu)
         
         adveditmenu = Menu(main_menu, tearoff=0)
-        adveditmenu.add_command(label="K-Means Segm", command=root.quit)
+        adveditmenu.add_command(label="K-Means Segm", command=self.kmeans_window)
+        adveditmenu.add_command(label="Mean-Shift Segm", command=root.quit)
         adveditmenu.add_command(label="Canny Edge", command=self.canny_window)
         main_menu.add_cascade(label="Advanced", menu=adveditmenu)
         
         helpmenu = Menu(main_menu, tearoff=0)
-        helpmenu.add_command(label="???", command=root.quit)
+        helpmenu.add_command(label="HELP", command=root.quit)
         helpmenu.add_command(label="About", command=root.quit)
         main_menu.add_cascade(label="Help", menu=helpmenu)
         
