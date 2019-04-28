@@ -1,22 +1,6 @@
 import numpy as np
 import sys
-from lib.toolbox import *
 
-def normalize(img):
-    img = img/img.max() * 255
-    return img // 1
-    
-def pil_to_np(pil):
-    return(np.array(pil).astype('int32'))
-
-def prepare_gaussian_kernel(val=1.4, w=3):
-    t = np.linspace(-1 * val, val, w)
-    bump = np.exp(-0.1 * t ** 2)
-    return bump / np.trapz(bump)
-
-def gaussian_kernel_2d(G):
-    return G[:,np.newaxis] * G[np.newaxis,:]
-    
 def fft_blurring(im, kernel):
     kernel_ft = np.fft.fft2(kernel, s=im.shape, axes=(0,1)) # turn the kernel to fourier form
     img_ft = np.fft.fft2(im, axes=(0,1))                    # turn the image to fourier form
@@ -37,12 +21,6 @@ def fft_gradient(im, op_x, op_y):
     theta = np.arctan2(np.abs(img_y), img_x)
     theta = theta*180/np.pi
     return (img_x, img_y, theta)
-    
-def sobel_op():
-    return (np.array([[-1,0,1],[-2,0,2],[-1,0,1]]), np.array([[1,2,1],[0,0,0],[-1,-2,-1]]))
-
-def scharr_op():
-    return (np.array([[-47,0,47],[-162,0,162],[-47,0,47]]), np.array([[47,162,47],[0,0,0],[-47,-162,-47]]))
     
 def non_max_sup(G, theta, weight=2, degree=45, maxdeg=180):
     nrows, ncols = G.shape
@@ -125,7 +103,7 @@ def spreading(src, weak, loc_i, loc_j):
     
 def canny(im, w=3, weight=2.7):
     im = pil_to_np(im)
-    imgrey = np.dot(im, [0.3, 0.587, 0.114])
+    imgrey = grayscale(im)
     
     #Step 1
     kernel = prepare_gaussian_kernel()
@@ -149,28 +127,19 @@ def canny(im, w=3, weight=2.7):
     last_im = hysteresis(strong, weak)
     
     return last_im
-
-def save_image(img):
-    from PIL import Image
     
-    desired_extension = '.jpg'
-    imagename_no_ext = sys.argv[1][:sys.argv[1].rindex('.')]
-    Image.fromarray(normalize(img).astype('uint8')).save("{}{}".format(imagename_no_ext, desired_extension))
-    
-if __name__ == "__main__": 
+if __name__ == "__main__":
+    from toolbox import *
     import matplotlib.pyplot as plt
     if len(sys.argv) >= 2:
         path = sys.argv[1]
-        
         im = plt.imread(path)
         
-        if len(sys.argv) == 4:
-            w = int(sys.argv[2])
-            we = float(sys.argv[3])
-            cny = canny(im, w, we)
-        else:
-            cny = canny(im)
-        save_image(cny)
-    else:
-        print('Error arguments')
-        exit()
+        w = int(sys.argv[2]) if len(sys.argv) >= 3 else 3
+        we = float(sys.argv[3]) if len(sys.argv) >= 4 else 2
+        
+        res = canny(im, w, we)
+        
+        save_image(res, sys.argv[1])
+else:
+    from lib.toolbox import *

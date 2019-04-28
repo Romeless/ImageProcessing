@@ -7,6 +7,7 @@ import os
 import time
 import lib.canny as cny
 import lib.kmeans as km
+import lib.segmentation as ms
 from lib.toolbox import *
 
 class ImageProcessing:
@@ -26,17 +27,47 @@ class ImageProcessing:
         self.imgArea = self.canvas.create_image(self.im_w / 2, self.im_h / 2, image = self.photo)
         self.canvas.grid(row=0, column=0, sticky=N+W)
         
-        #Label(self.image_frame, text="H: {} ; W: {}".format(self.im_w, self.im_h)).grid(row=1)
+        self.im_w, self.im_h = self.image.size
+        Label(self.root, text="H: {}, W: {}".format(self.im_w, self.im_h)).grid(row=1, column=0, sticky=E)
+    
+    def save_image(self):
+        save_image(self.image, self.pathname)
         
     def refresh_image(self, im):
         self.image = im
         self.photo = self.pil_resize()
         
         self.canvas.itemconfig(self.imgArea, image = self.photo)
-        #Label(self.root, text="H: {} ; W: {}".format(self.im_w, self.im_h)).grid(row=1)
-    
+        
+        self.im_w, self.im_h = self.image.size
+        Label(self.root, text="H: {}, W: {}".format(self.im_w, self.im_h)).grid(row=1, column=0, sticky=E)
+      
     def undo(self):
         self.refresh_image(self.last_image.copy())
+    
+    def resize_window(self):
+        resize_window = Toplevel(self.root)
+        resize_window.title("Resize")
+        
+        Label(resize_window, text="Ratio").grid(row=1, sticky=W)
+        
+        resize_ratio_entry = Entry(resize_window)
+        resize_ratio_entry.insert(0, "1.0")
+        resize_ratio_entry.grid(row=1, column=1, sticky=W)
+        
+        resize_button = Button(resize_window, text="Resize",
+                                command= lambda: self.resize(
+                                float(resize_ratio_entry.get())
+                                )
+                               )
+        resize_button.grid(row=0, column = 2, rowspan=2, sticky= N+E+W+S)
+        
+    def resize(self, ratio):
+        self.im_w, self.im_h = self.image.size
+        
+        self.image = self.image.resize((int(self.im_w * ratio), int(self.im_h * ratio)), Image.NEAREST)     
+        self.refresh_image(self.image)
+        print("resized")
         
     def kmeans_window(self):
         kmeans_window = Toplevel(self.root)
@@ -71,14 +102,57 @@ class ImageProcessing:
     def kmeans(self, cluster, tol, iter):
         self.last_image = self.image.copy()
         
-        res = km.kmeans(data = self.image, k = cluster, tol = tol, max_iter = iter)
+        res = km.kmeans(self.image, k = cluster, tol = tol, max_iter = iter)
+        
+        self.refresh_image(res)     
+        
+    def meanshift_window(self):
+        meanshift_window = Toplevel(self.root)
+        meanshift_window.title("Mean Shift Segmentation")
+        
+        Label(meanshift_window, text="Spatial Radius").grid(row=0, sticky=W)
+        Label(meanshift_window, text="Range Radius").grid(row=1, sticky=W)
+        Label(meanshift_window, text="Min Density").grid(row=2, sticky=W)
+        Label(meanshift_window, text="Speedup Level (0,1,2)").grid(row=3, sticky=W)
+        Label(meanshift_window, text="This will possibly take a lot of time").grid(row=4, sticky=W)
+        
+        meanshift_entry_spatial = Entry(meanshift_window)
+        meanshift_entry_range = Entry(meanshift_window)
+        meanshift_entry_dens = Entry(meanshift_window)
+        meanshift_entry_speedup = Entry(meanshift_window)
+        meanshift_entry_spatial.insert(0,"3")
+        meanshift_entry_range.insert(0,"1.4")
+        meanshift_entry_dens.insert(0,"50")
+        meanshift_entry_speedup.insert(0,"2")
+        meanshift_entry_spatial.grid(row=0, column=1)
+        meanshift_entry_range.grid(row=1, column=1)
+        meanshift_entry_dens.grid(row=2, column=1)
+        meanshift_entry_speedup.grid(row=3, column=1)
+        
+        self.meanshift_button = Button(meanshift_window, text="SUBMIT", 
+                                        command= lambda: self.meanshift(
+                                            int(meanshift_entry_spatial.get()),
+                                            float(meanshift_entry_range.get()),
+                                            int(meanshift_entry_dens.get()),
+                                            int(meanshift_entry_speedup.get())
+                                            )
+                                    )
+        self.meanshift_button.grid(row=0, column=2, rowspan=2, sticky=N+S+E+W)
+        
+        
+        self.meanshift_w_undo = Button(meanshift_window, text="UNDO", command=self.undo)
+        self.meanshift_w_undo.grid(row=4, column=2, sticky=S+E)
+        
+    def meanshift(self, spatial, range, density, speed):
+        self.last_image = self.image.copy()
+        
+        segm = ms.Segmenter(spatial_radius=spatial, range_radius=range,
+                        min_density = density, speedup_level=speed)
+        (res, labels, nb_regions) = segm.segmentate(normalize(np.array(self.image)).astype('uint8'))
+        res = Image.fromarray(normalize(res).astype('uint8'))
         
         self.refresh_image(res)
         
-        
-    def gaussian_image_segmentation(self):
-        pass
-           
     def canny_window(self):
         canny_window = Toplevel(self.root)
         canny_window.title("Canny Edge Finding")
@@ -107,16 +181,9 @@ class ImageProcessing:
         
         self.last_image = self.image.copy()
         res = cny.canny(im = self.image, w = window, weight = weight)
-        res = Image.fromarray(normalize(res).astype('int8'))
+        res = Image.fromarray(normalize(res).astype('uint8'))
         
         self.refresh_image(res)
-        
-    def save_image(self):
-        desired_extension = '.jpg'
-        basename = os.path.basename(self.pathname)
-        imagename_no_ext = basename[:basename.rindex('.')]
-        
-        self.image.convert("RGB").save("{}{}-{}{}".format("outputImage/", imagename_no_ext, time.time(), desired_extension))
         
     def __init__(self, master):
         self.root = master
@@ -135,11 +202,12 @@ class ImageProcessing:
         
         editmenu = Menu(main_menu, tearoff=0)
         editmenu.add_command(label="Undo", command=self.undo)
+        editmenu.add_command(label="Resize", command=self.resize_window)
         main_menu.add_cascade(label="Edit", menu=editmenu)
         
         adveditmenu = Menu(main_menu, tearoff=0)
         adveditmenu.add_command(label="K-Means Segm", command=self.kmeans_window)
-        adveditmenu.add_command(label="Mean-Shift Segm", command=root.quit)
+        adveditmenu.add_command(label="Mean-Shift Segm", command=self.meanshift_window)
         adveditmenu.add_command(label="Canny Edge", command=self.canny_window)
         main_menu.add_cascade(label="Advanced", menu=adveditmenu)
         
